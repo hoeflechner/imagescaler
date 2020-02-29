@@ -10,20 +10,45 @@ var dir = path.join(__dirname, "data");
 
 app.get("*", function(req, res) {
   const start = new Date();
-  const file = path.join(dir, req.path);
+
+  var query = req.query;
+  var file;
+  var dirs = req.path.split("/");
+  const size = parseInt(dirs[1]);
+
+  if (isNaN(size)) {
+    if (query.width) {
+      query.width = parseInt(query.width);
+    }
+    if (query.height) {
+      query.height = parseInt(query.height);
+    }
+    if (!query.fit) {
+      query.fit = sharp.fit.inside;
+    }
+    file = path.join(dir, req.path);
+  } else {
+    query.width = size;
+    query.height = size;
+    query.fit = sharp.fit.inside;
+
+    file = dir;
+    for (var i = 2; i < dirs.length; i++){
+      file = path.join(file, dirs[i]);
+    }
+  }
+
+  if (req.path.includes("/favicon.ico")) {
+    return;
+  }
+
   if (file.indexOf(dir + path.sep) !== 0) {
     return res.status(403).end("Forbidden");
   }
-  var query = req.query;
-  if (query.width) {
-    query.width = parseInt(query.width);
-  }
-  if (query.height) {
-    query.height = parseInt(query.height);
-  }
 
   sharp(file)
-    .resize(req.query)
+    .resize(query)
+    .jpeg({ quality: 75, progressive: true })
     .toBuffer()
     .then(data => {
       res.set("Content-Type", "image/jpeg");
@@ -34,7 +59,17 @@ app.get("*", function(req, res) {
     })
     .catch(err => {
       console.log("Error: " + err.toString());
-      return res.status(404).end(err.message);
+      sharp("assets/no-image-icon-23490.png")
+        .resize(query)
+        .jpeg({ quality: 100, progressive: true })
+        .toBuffer()
+        .then(data => {
+          res.set("Content-Type", "image/jpeg");
+          res.send(data);
+          var end = new Date() - start;
+          console.info("Execution time: %dms", end);
+          return;
+        });
     });
 });
 
